@@ -59,12 +59,24 @@ def setup_database():
     conn.close()
 
 # Funzione di avvio del bot
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Invia un messaggio di benvenuto al comando /start"""
+    await update.message.reply_text("Ciao! Sono il bot di assistenza tecnica di AgTechDesigne. Come posso aiutarti?")
+
+# Funzione per gestire i bottoni
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    # Qui puoi aggiungere il comportamento per i bottoni
+    await query.edit_message_text(text="Hai cliccato un bottone!")
+
+# Funzione principale
 def main():
     setup_database()  # Crea il database se non esiste
     
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Comandi
+    # Aggiungi gestori per i comandi e i messaggi
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
