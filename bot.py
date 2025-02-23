@@ -30,22 +30,61 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == 'prodotti':
-        # Aggiungi i prodotti dal file Excel (esempio)
-        await send_products(update)
+        await send_product_categories(query)
+    elif query.data.startswith('category_'):
+        category = query.data.split('_')[1]
+        await send_products(query, category)
+    elif query.data.startswith('preventivo_'):
+        product_name = query.data.split('_')[1]
+        await request_quote(query, product_name)
     elif query.data == 'assistenza':
-        # Inizia la raccolta del messaggio di assistenza
         await query.message.reply_text("Scrivi il tuo messaggio di assistenza, e verrà inviato come ticket.")
-        # Settiamo lo stato dell'utente in attesa di un messaggio di assistenza
         context.user_data['waiting_for_assistance'] = True
 
-# Funzione per inviare i prodotti dal file Excel
-async def send_products(update: Update):
-    # Carica il file Excel (assumendo che contenga una lista di prodotti)
-    df = pd.read_excel('prodotti.xlsx')  # Assicurati di avere questo file nella cartella corretta
-    product_list = df.to_string(index=False)
+# Funzione per inviare le categorie di prodotti
+async def send_product_categories(update: Update):
+    keyboard = [
+        [InlineKeyboardButton("Excel Board and File", callback_data='category_excel')],
+        [InlineKeyboardButton("Custom Software", callback_data='category_software')],
+        [InlineKeyboardButton("AI Agent", callback_data='category_ai')],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.callback_query.message.reply_text("📦 **Seleziona una categoria di prodotti:**", reply_markup=reply_markup)
 
-    # Invia i prodotti all'utente
-    await update.message.reply_text(f"🛒 Ecco i nostri prodotti:\n\n{product_list}\n\nPer ulteriori dettagli, contattaci!")
+# Funzione per inviare i prodotti di una categoria specifica
+async def send_products(update: Update, category: str):
+    df = pd.read_excel('prodotti.xlsx')
+
+    products = df[df['Categoria'] == category]
+
+    if products.empty:
+        await update.callback_query.message.reply_text("⚠️ Nessun prodotto disponibile in questa categoria.")
+        return
+
+    for _, row in products.iterrows():
+        product_name = row["Nome"]
+        description = row["Descrizione"]
+        keyboard = [[InlineKeyboardButton("💬 Richiedi Preventivo", callback_data=f'preventivo_{product_name}')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.callback_query.message.reply_text(
+            f"🔹 **{product_name}**\n{description}", 
+            reply_markup=reply_markup
+        )
+
+# Funzione per gestire la richiesta di preventivo
+async def request_quote(update: Update, product_name: str):
+    user_id = update.callback_query.from_user.id
+    ticket_id = save_ticket(user_id, f"Richiesta preventivo per {product_name}")
+
+    await update.callback_query.message.reply_text(
+        f"✅ **Richiesta inviata!**\nTicket #{ticket_id} per il prodotto: {product_name}"
+    )
+
+    await update.callback_query.message.reply_text(
+        f"📩 **Nuova richiesta di preventivo!**\nTicket #{ticket_id}\nProdotto: {product_name}",
+        chat_id=ADMIN_ID
+    )
 
 # Funzione per gestire i messaggi di assistenza
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -53,19 +92,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.message.from_user.id
         message_text = update.message.text
 
-        # Crea un ticket per l'assistenza
         ticket_id = save_ticket(user_id, message_text)
         await update.message.reply_text(f"✅ **Ticket #{ticket_id} aperto!** Ti risponderemo al più presto.")
 
-        # Notifica all'admin tramite il canale di Telegram
         await context.bot.send_message(ADMIN_ID, f"📩 **Nuova richiesta di assistenza!**\nTicket #{ticket_id}\nMessaggio: {message_text}")
 
-        # Reset stato per non ricevere più messaggi come ticket
         context.user_data['waiting_for_assistance'] = False
     else:
-        # Se non è in attesa di assistenza, trattiamo come una normale FAQ
         await update.message.reply_text("Per favore, seleziona una delle opzioni dalla tastiera.")
-        
+
 # Funzione per salvare un ticket nel database
 def save_ticket(user_id, message):
     conn = sqlite3.connect("tickets.db")
@@ -93,11 +128,10 @@ def setup_database():
 
 # Funzione di avvio del bot
 def main():
-    setup_database()  # Crea il database se non esiste
+    setup_database()
     
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Comandi
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
