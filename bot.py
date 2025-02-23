@@ -10,8 +10,8 @@ ADMIN_ID = os.getenv("ADMIN_ID")
 # Funzione per creare la pulsantiera base
 def start_keyboard():
     keyboard = [
-        [InlineKeyboardButton("Sito Web 🌍", url="https://agtechwebsite.vercel.app")],
-        [InlineKeyboardButton("Prodotti 🛒", callback_data='prodotti')],
+        [InlineKeyboardButton("Sito Web 🌐", url="https://agtechwebsite.vercel.app")],
+        [InlineKeyboardButton("Prodotti 📦", callback_data='prodotti')],
         [InlineKeyboardButton("Assistenza 🆘", callback_data='assistenza')],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -19,11 +19,11 @@ def start_keyboard():
 # Funzione per gestire il comando /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Benvenuto nel bot di **AgTechDesigne**! Seleziona un'opzione dal menu:",
+        "Benvenuto! Come posso aiutarti oggi?",
         reply_markup=start_keyboard()
     )
 
-# Funzione per gestire i tasti "Prodotti" e "Assistenza"
+# Funzione per gestire i pulsanti della tastiera
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -31,76 +31,74 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == 'prodotti':
         await send_product_categories(query)
     elif query.data == 'assistenza':
-        await query.message.reply_text("✍️ Scrivi il tuo messaggio di assistenza, verrà inviato come ticket.")
+        await query.message.reply_text("✉️ Invia il tuo messaggio di assistenza. Verrà registrato come ticket.")
         context.user_data['waiting_for_assistance'] = True
     elif query.data.startswith("category_"):
         category = query.data.split("_")[1]
-        await send_products(query, category)
-    elif query.data.startswith("request_"):
-        product_name = query.data.split("_", 1)[1]
+        await send_products_by_category(query, category)
+    elif query.data.startswith("quote_"):
+        product_name = query.data.split("_")[1]
         await request_quote(query, product_name)
 
-# Funzione per mostrare le categorie di prodotti
+# Funzione per inviare le categorie di prodotti
 async def send_product_categories(query):
     keyboard = [
-        [InlineKeyboardButton("📊 Excel Board and File", callback_data='category_excel')],
-        [InlineKeyboardButton("💻 Custom Software", callback_data='category_software')],
-        [InlineKeyboardButton("🤖 AI Agent", callback_data='category_ai')],
+        [InlineKeyboardButton("Excel Board & File 📊", callback_data="category_excel")],
+        [InlineKeyboardButton("Custom Software 💻", callback_data="category_software")],
+        [InlineKeyboardButton("AI Agent 🤖", callback_data="category_ai")],
+        [InlineKeyboardButton("🔙 Indietro", callback_data="start")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.message.reply_text("📦 **Seleziona una categoria di prodotti:**", reply_markup=reply_markup)
+    await query.message.edit_text("📦 **Seleziona una categoria di prodotti:**", reply_markup=reply_markup)
 
-# Funzione per mostrare i prodotti in una categoria
-async def send_products(query, category):
+# Funzione per inviare i prodotti di una categoria
+async def send_products_by_category(query, category):
     products = {
         "excel": [
-            ("Dashboard Interattiva", "📊 Report automatizzati e interattivi in Excel."),
-            ("Gestione Inventario", "📦 Foglio Excel avanzato per il controllo delle scorte.")
+            ("Dashboard Finance", "Report finanziari automatici.", "quote_dashboard"),
+            ("Gestione Magazzino", "Traccia e organizza il magazzino.", "quote_magazzino")
         ],
         "software": [
-            ("Software Gestionale", "💼 Applicazione personalizzata per la tua azienda."),
-            ("Automazione Dati", "🔄 Automazione di processi ripetitivi con software su misura.")
+            ("Gestionale Aziendale", "Software su misura per la tua azienda.", "quote_gestionale"),
+            ("App Mobile", "Sviluppo app per iOS e Android.", "quote_app")
         ],
         "ai": [
-            ("AI Chatbot", "🤖 Bot intelligente per supporto clienti e automazione."),
-            ("Analisi Predittiva", "📈 AI per previsioni basate su dati e analisi avanzate.")
+            ("Chatbot AI", "Assistenti virtuali personalizzati.", "quote_chatbot"),
+            ("Analisi Dati AI", "Modelli AI per analisi avanzate.", "quote_analisi")
         ]
     }
 
-    if category not in products:
-        await query.message.reply_text("❌ Categoria non trovata.")
-        return
-
     keyboard = []
-    for name, desc in products[category]:
-        keyboard.append([InlineKeyboardButton(f"{name}", callback_data=f"request_{name.replace(' ', '_')}")])
-        await query.message.reply_text(f"**{name}**\n{desc}")
+    for product in products.get(category, []):
+        name, description, callback = product
+        keyboard.append([InlineKeyboardButton(f"{name} - {description}", callback_data=callback)])
 
+    keyboard.append([InlineKeyboardButton("🔙 Indietro", callback_data="prodotti")])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.message.reply_text("💡 **Seleziona un prodotto per richiedere un preventivo:**", reply_markup=reply_markup)
+
+    await query.message.edit_text(f"🛒 **Prodotti disponibili per {category.capitalize()}**", reply_markup=reply_markup)
 
 # Funzione per richiedere un preventivo
 async def request_quote(query, product_name):
-    product_name = product_name.replace("_", " ")
-    await query.message.reply_text(f"📩 Hai richiesto un preventivo per **{product_name}**.\nIl nostro team ti contatterà presto!")
-    
-    # Notifica all'admin con il prodotto richiesto
-    await query.bot.send_message(ADMIN_ID, f"📌 **Nuova richiesta di preventivo:**\n🛒 **Prodotto:** {product_name}\n📩 Contatta l'utente!")
+    await query.message.reply_text(f"📩 Hai richiesto un preventivo per **{product_name}**. Ti contatteremo al più presto!")
+    await context.bot.send_message(ADMIN_ID, f"📌 **Richiesta Preventivo**\n🛒 Prodotto: {product_name}\n📨 Da: @{query.from_user.username}")
 
-# Funzione per gestire i messaggi (assistenza)
+# Funzione per gestire i messaggi di assistenza
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if 'waiting_for_assistance' in context.user_data and context.user_data['waiting_for_assistance']:
+    if context.user_data.get('waiting_for_assistance', False):
         user_id = update.message.from_user.id
         message_text = update.message.text
 
         ticket_id = save_ticket(user_id, message_text)
         await update.message.reply_text(f"✅ **Ticket #{ticket_id} aperto!** Ti risponderemo al più presto.")
+        
+        # Notifica all'admin
+        await context.bot.send_message(ADMIN_ID, f"📩 **Nuova richiesta di assistenza!**\nTicket #{ticket_id}\nMessaggio: {message_text}")
 
-        await context.bot.send_message(ADMIN_ID, f"📩 **Nuovo ticket di assistenza!**\n🎫 **Ticket #{ticket_id}**\n💬 Messaggio: {message_text}")
-
+        # Resetta lo stato
         context.user_data['waiting_for_assistance'] = False
     else:
-        await update.message.reply_text("❓ Usa il menu per navigare tra le opzioni.")
+        await update.message.reply_text("❓ Usa la tastiera per navigare tra le opzioni disponibili.")
 
 # Funzione per salvare un ticket nel database
 def save_ticket(user_id, message):
@@ -138,4 +136,8 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("🤖 Bot
+    print("🤖 Bot avviato...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
