@@ -2,7 +2,6 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import sqlite3
 import os
-import pandas as pd
 
 # Token del bot (usa le variabili d'ambiente su Railway)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -11,16 +10,16 @@ ADMIN_ID = os.getenv("ADMIN_ID")
 # Funzione per creare la pulsantiera base
 def start_keyboard():
     keyboard = [
-        [InlineKeyboardButton("Sito Web", url="https://agtechwebsite.vercel.app")],
-        [InlineKeyboardButton("Prodotti", callback_data='prodotti')],
-        [InlineKeyboardButton("Assistenza", callback_data='assistenza')],
+        [InlineKeyboardButton("Sito Web 🌍", url="https://agtechwebsite.vercel.app")],
+        [InlineKeyboardButton("Prodotti 🛒", callback_data='prodotti')],
+        [InlineKeyboardButton("Assistenza 🆘", callback_data='assistenza')],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 # Funzione per gestire il comando /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Benvenuto! Come posso aiutarti oggi?",
+        "👋 Benvenuto nel bot di **AgTechDesigne**! Seleziona un'opzione dal menu:",
         reply_markup=start_keyboard()
     )
 
@@ -31,62 +30,64 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == 'prodotti':
         await send_product_categories(query)
-    elif query.data.startswith('category_'):
-        category = query.data.split('_')[1]
-        await send_products(query, category)
-    elif query.data.startswith('preventivo_'):
-        product_name = query.data.split('_')[1]
-        await request_quote(query, product_name)
     elif query.data == 'assistenza':
-        await query.message.reply_text("Scrivi il tuo messaggio di assistenza, e verrà inviato come ticket.")
+        await query.message.reply_text("✍️ Scrivi il tuo messaggio di assistenza, verrà inviato come ticket.")
         context.user_data['waiting_for_assistance'] = True
+    elif query.data.startswith("category_"):
+        category = query.data.split("_")[1]
+        await send_products(query, category)
+    elif query.data.startswith("request_"):
+        product_name = query.data.split("_", 1)[1]
+        await request_quote(query, product_name)
 
-# Funzione per inviare le categorie di prodotti
-async def send_product_categories(update: Update):
+# Funzione per mostrare le categorie di prodotti
+async def send_product_categories(query):
     keyboard = [
-        [InlineKeyboardButton("Excel Board and File", callback_data='category_excel')],
-        [InlineKeyboardButton("Custom Software", callback_data='category_software')],
-        [InlineKeyboardButton("AI Agent", callback_data='category_ai')],
+        [InlineKeyboardButton("📊 Excel Board and File", callback_data='category_excel')],
+        [InlineKeyboardButton("💻 Custom Software", callback_data='category_software')],
+        [InlineKeyboardButton("🤖 AI Agent", callback_data='category_ai')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.callback_query.message.reply_text("📦 **Seleziona una categoria di prodotti:**", reply_markup=reply_markup)
+    await query.message.reply_text("📦 **Seleziona una categoria di prodotti:**", reply_markup=reply_markup)
 
-# Funzione per inviare i prodotti di una categoria specifica
-async def send_products(update: Update, category: str):
-    df = pd.read_excel('prodotti.xlsx')
+# Funzione per mostrare i prodotti in una categoria
+async def send_products(query, category):
+    products = {
+        "excel": [
+            ("Dashboard Interattiva", "📊 Report automatizzati e interattivi in Excel."),
+            ("Gestione Inventario", "📦 Foglio Excel avanzato per il controllo delle scorte.")
+        ],
+        "software": [
+            ("Software Gestionale", "💼 Applicazione personalizzata per la tua azienda."),
+            ("Automazione Dati", "🔄 Automazione di processi ripetitivi con software su misura.")
+        ],
+        "ai": [
+            ("AI Chatbot", "🤖 Bot intelligente per supporto clienti e automazione."),
+            ("Analisi Predittiva", "📈 AI per previsioni basate su dati e analisi avanzate.")
+        ]
+    }
 
-    products = df[df['Categoria'] == category]
-
-    if products.empty:
-        await update.callback_query.message.reply_text("⚠️ Nessun prodotto disponibile in questa categoria.")
+    if category not in products:
+        await query.message.reply_text("❌ Categoria non trovata.")
         return
 
-    for _, row in products.iterrows():
-        product_name = row["Nome"]
-        description = row["Descrizione"]
-        keyboard = [[InlineKeyboardButton("💬 Richiedi Preventivo", callback_data=f'preventivo_{product_name}')]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = []
+    for name, desc in products[category]:
+        keyboard.append([InlineKeyboardButton(f"{name}", callback_data=f"request_{name.replace(' ', '_')}")])
+        await query.message.reply_text(f"**{name}**\n{desc}")
 
-        await update.callback_query.message.reply_text(
-            f"🔹 **{product_name}**\n{description}", 
-            reply_markup=reply_markup
-        )
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.message.reply_text("💡 **Seleziona un prodotto per richiedere un preventivo:**", reply_markup=reply_markup)
 
-# Funzione per gestire la richiesta di preventivo
-async def request_quote(update: Update, product_name: str):
-    user_id = update.callback_query.from_user.id
-    ticket_id = save_ticket(user_id, f"Richiesta preventivo per {product_name}")
+# Funzione per richiedere un preventivo
+async def request_quote(query, product_name):
+    product_name = product_name.replace("_", " ")
+    await query.message.reply_text(f"📩 Hai richiesto un preventivo per **{product_name}**.\nIl nostro team ti contatterà presto!")
+    
+    # Notifica all'admin con il prodotto richiesto
+    await query.bot.send_message(ADMIN_ID, f"📌 **Nuova richiesta di preventivo:**\n🛒 **Prodotto:** {product_name}\n📩 Contatta l'utente!")
 
-    await update.callback_query.message.reply_text(
-        f"✅ **Richiesta inviata!**\nTicket #{ticket_id} per il prodotto: {product_name}"
-    )
-
-    await update.callback_query.message.reply_text(
-        f"📩 **Nuova richiesta di preventivo!**\nTicket #{ticket_id}\nProdotto: {product_name}",
-        chat_id=ADMIN_ID
-    )
-
-# Funzione per gestire i messaggi di assistenza
+# Funzione per gestire i messaggi (assistenza)
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'waiting_for_assistance' in context.user_data and context.user_data['waiting_for_assistance']:
         user_id = update.message.from_user.id
@@ -95,11 +96,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ticket_id = save_ticket(user_id, message_text)
         await update.message.reply_text(f"✅ **Ticket #{ticket_id} aperto!** Ti risponderemo al più presto.")
 
-        await context.bot.send_message(ADMIN_ID, f"📩 **Nuova richiesta di assistenza!**\nTicket #{ticket_id}\nMessaggio: {message_text}")
+        await context.bot.send_message(ADMIN_ID, f"📩 **Nuovo ticket di assistenza!**\n🎫 **Ticket #{ticket_id}**\n💬 Messaggio: {message_text}")
 
         context.user_data['waiting_for_assistance'] = False
     else:
-        await update.message.reply_text("Per favore, seleziona una delle opzioni dalla tastiera.")
+        await update.message.reply_text("❓ Usa il menu per navigare tra le opzioni.")
 
 # Funzione per salvare un ticket nel database
 def save_ticket(user_id, message):
@@ -132,12 +133,9 @@ def main():
     
     app = Application.builder().token(BOT_TOKEN).build()
     
+    # Comandi
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("🤖 Bot avviato...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+    print("🤖 Bot
