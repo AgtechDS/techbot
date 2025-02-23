@@ -34,8 +34,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_products(update)
     elif query.data == 'assistenza':
         # Inizia la raccolta del messaggio di assistenza
-        await update.message.reply_text("Scrivi il tuo messaggio di assistenza, e verrà inviato come ticket.")
-        return
+        await query.message.reply_text("Scrivi il tuo messaggio di assistenza, e verrà inviato come ticket.")
+        # Settiamo lo stato dell'utente in attesa di un messaggio di assistenza
+        context.user_data['waiting_for_assistance'] = True
 
 # Funzione per inviare i prodotti dal file Excel
 async def send_products(update: Update):
@@ -48,16 +49,23 @@ async def send_products(update: Update):
 
 # Funzione per gestire i messaggi di assistenza
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    message_text = update.message.text
+    if 'waiting_for_assistance' in context.user_data and context.user_data['waiting_for_assistance']:
+        user_id = update.message.from_user.id
+        message_text = update.message.text
 
-    # Crea un ticket per l'assistenza
-    ticket_id = save_ticket(user_id, message_text)
-    await update.message.reply_text(f"✅ **Ticket #{ticket_id} aperto!** Ti risponderemo al più presto.")
+        # Crea un ticket per l'assistenza
+        ticket_id = save_ticket(user_id, message_text)
+        await update.message.reply_text(f"✅ **Ticket #{ticket_id} aperto!** Ti risponderemo al più presto.")
 
-    # Notifica all'admin tramite il canale di Telegram
-    await context.bot.send_message(ADMIN_ID, f"📩 **Nuova richiesta di assistenza!**\nTicket #{ticket_id}\nMessaggio: {message_text}")
+        # Notifica all'admin tramite il canale di Telegram
+        await context.bot.send_message(ADMIN_ID, f"📩 **Nuova richiesta di assistenza!**\nTicket #{ticket_id}\nMessaggio: {message_text}")
 
+        # Reset stato per non ricevere più messaggi come ticket
+        context.user_data['waiting_for_assistance'] = False
+    else:
+        # Se non è in attesa di assistenza, trattiamo come una normale FAQ
+        await update.message.reply_text("Per favore, seleziona una delle opzioni dalla tastiera.")
+        
 # Funzione per salvare un ticket nel database
 def save_ticket(user_id, message):
     conn = sqlite3.connect("tickets.db")
