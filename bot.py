@@ -1,43 +1,68 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-import sqlite3  # Per il database
+import sqlite3
 import os
+import pandas as pd
 
 # Token del bot (usa le variabili d'ambiente su Railway)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 
-# Dizionario di FAQ
-FAQ = {
-    "costi": "💰 I costi dipendono dal progetto. Contattaci per un preventivo gratuito!",
-    "tempi di sviluppo": "⏳ Il tempo varia in base alla complessità. Di solito, da 1 a 4 settimane.",
-    "ai assistenti": "🤖 Creiamo AI personalizzati per automazione, chat e assistenza.",
-    "siti web": "🖥️ Realizziamo siti web moderni, sia vetrina che e-commerce."
-}
+# Funzione per creare la pulsantiera base
+def start_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("Sito Web", url="https://agtechwebsite.vercel.app")],
+        [InlineKeyboardButton("Prodotti", callback_data='prodotti')],
+        [InlineKeyboardButton("Assistenza", callback_data='assistenza')],
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
-# Funzione per rispondere alle FAQ
+# Funzione per gestire il comando /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Benvenuto! Come posso aiutarti oggi?",
+        reply_markup=start_keyboard()
+    )
+
+# Funzione per gestire i tasti "Prodotti" e "Assistenza"
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == 'prodotti':
+        # Aggiungi i prodotti dal file Excel (esempio)
+        await send_products(update)
+    elif query.data == 'assistenza':
+        # Inizia la raccolta del messaggio di assistenza
+        await update.message.reply_text("Scrivi il tuo messaggio di assistenza, e verrà inviato come ticket.")
+        return
+
+# Funzione per inviare i prodotti dal file Excel
+async def send_products(update: Update):
+    # Carica il file Excel (assumendo che contenga una lista di prodotti)
+    df = pd.read_excel('prodotti.xlsx')  # Assicurati di avere questo file nella cartella corretta
+    product_list = df.to_string(index=False)
+
+    # Invia i prodotti all'utente
+    await update.message.reply_text(f"🛒 Ecco i nostri prodotti:\n\n{product_list}\n\nPer ulteriori dettagli, contattaci!")
+
+# Funzione per gestire i messaggi di assistenza
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    message_text = update.message.text.lower()
+    message_text = update.message.text
 
-    # Controlla se il messaggio corrisponde a una FAQ
-    for keyword, response in FAQ.items():
-        if keyword in message_text:
-            await update.message.reply_text(response)
-            return
+    # Crea un ticket per l'assistenza
+    ticket_id = save_ticket(user_id, message_text)
+    await update.message.reply_text(f"✅ **Ticket #{ticket_id} aperto!** Ti risponderemo al più presto.")
 
-    # Se non è una FAQ, crea un ticket
-    ticket_id = save_ticket(user_id, message_text, "aperto")
-    await update.message.reply_text(f"✅ **Ticket #{ticket_id} aperto!**\nTi risponderemo al più presto.")
-    
-    # Notifica all'admin
+    # Notifica all'admin tramite il canale di Telegram
     await context.bot.send_message(ADMIN_ID, f"📩 **Nuova richiesta di assistenza!**\nTicket #{ticket_id}\nMessaggio: {message_text}")
 
 # Funzione per salvare un ticket nel database
-def save_ticket(user_id, message, status):
+def save_ticket(user_id, message):
     conn = sqlite3.connect("tickets.db")
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO tickets (user_id, message, status) VALUES (?, ?, ?)", (user_id, message, status))
+    cursor.execute("INSERT INTO tickets (user_id, message) VALUES (?, ?)", (user_id, message))
     conn.commit()
     ticket_id = cursor.lastrowid
     conn.close()
@@ -52,51 +77,20 @@ def setup_database():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             message TEXT,
-            status TEXT DEFAULT 'aperto',
-            priority TEXT DEFAULT 'media'
+            status TEXT DEFAULT 'aperto'
         )
     """)
     conn.commit()
     conn.close()
 
 # Funzione di avvio del bot
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Invia un messaggio di benvenuto al comando /start"""
-    keyboard = [
-        [InlineKeyboardButton("FAQ", callback_data='faq')],
-        [InlineKeyboardButton("Assistenza tecnica", callback_data='assistente')],
-        [InlineKeyboardButton("Richiesta personalizzata", callback_data='richiesta')],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Ciao! Sono il bot di assistenza tecnica di AgTechDesigne. Come posso aiutarti?", reply_markup=reply_markup)
-
-# Funzione per gestire i bottoni
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    data = query.data
-    await query.answer()
-
-    if data == "faq":
-        await query.edit_message_text(text="Ecco alcune FAQ:\n\n1. Costi\n2. Tempi di sviluppo\n3. AI Assistenti\n4. Siti web")
-    elif data == "assistente":
-        await query.edit_message_text(text="Puoi inviare il tuo messaggio e aprire un ticket. Ti risponderemo al più presto.")
-    elif data == "richiesta":
-        await query.edit_message_text(text="Compila il modulo per richiedere una consulenza personalizzata.")
-
-# Funzione per gestire il comando /help
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Invia il comando di aiuto"""
-    await update.message.reply_text("Benvenuto! Usa i seguenti comandi:\n\n/start - Avvia il bot\n/help - Mostra aiuto\n/faq - Consulta le FAQ")
-
-# Funzione principale
 def main():
     setup_database()  # Crea il database se non esiste
     
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Aggiungi gestori per i comandi e i messaggi
+    # Comandi
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
