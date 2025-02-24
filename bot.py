@@ -5,8 +5,8 @@ import os
 
 # Token del bot e ID canali Telegram
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_QUOTE_ID = "-2290498999"  # Canale per preventivi
-CHANNEL_SUPPORT_ID = "-2352452423"  # Canale per assistenza
+CHANNEL_QUOTE_ID = "-1002290498999"  # Canale per preventivi
+CHANNEL_SUPPORT_ID = "-1002352452423"  # Canale per assistenza
 
 # Funzione per creare la pulsantiera base
 def start_keyboard():
