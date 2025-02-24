@@ -3,9 +3,10 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 import sqlite3
 import os
 
-# Token del bot (usa le variabili d'ambiente su Railway)
+# Token del bot e ID canali Telegram
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = os.getenv("ADMIN_ID")
+CHANNEL_QUOTE_ID = "-2290498999"  # Canale per preventivi
+CHANNEL_SUPPORT_ID = "-2352452423"  # Canale per assistenza
 
 # Funzione per creare la pulsantiera base
 def start_keyboard():
@@ -38,7 +39,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_products_by_category(query, category)
     elif query.data.startswith("quote_"):
         product_name = query.data.split("_")[1]
-        await request_quote(query, product_name)
+        await request_quote(query, context, product_name)
 
 # Funzione per inviare le categorie di prodotti
 async def send_product_categories(query):
@@ -69,8 +70,7 @@ async def send_products_by_category(query, category):
     }
 
     keyboard = []
-    for product in products.get(category, []):
-        name, description, callback = product
+    for name, description, callback in products.get(category, []):
         keyboard.append([InlineKeyboardButton(f"{name} - {description}", callback_data=callback)])
 
     keyboard.append([InlineKeyboardButton("🔙 Indietro", callback_data="prodotti")])
@@ -79,23 +79,32 @@ async def send_products_by_category(query, category):
     await query.message.edit_text(f"🛒 **Prodotti disponibili per {category.capitalize()}**", reply_markup=reply_markup)
 
 # Funzione per richiedere un preventivo
-async def request_quote(query, product_name):
+async def request_quote(query, context, product_name):
+    user = query.from_user
+    message = f"📌 **Nuova Richiesta di Preventivo**\n🛒 **Prodotto:** {product_name}\n👤 **Utente:** @{user.username or 'Sconosciuto'} ({user.id})"
+
     await query.message.reply_text(f"📩 Hai richiesto un preventivo per **{product_name}**. Ti contatteremo al più presto!")
-    await context.bot.send_message(ADMIN_ID, f"📌 **Richiesta Preventivo**\n🛒 Prodotto: {product_name}\n📨 Da: @{query.from_user.username}")
+
+    # Invia la richiesta al canale dei preventivi
+    await context.bot.send_message(CHANNEL_QUOTE_ID, message)
 
 # Funzione per gestire i messaggi di assistenza
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('waiting_for_assistance', False):
         user_id = update.message.from_user.id
+        username = update.message.from_user.username or "Sconosciuto"
         message_text = update.message.text
 
         ticket_id = save_ticket(user_id, message_text)
-        await update.message.reply_text(f"✅ **Ticket #{ticket_id} aperto!** Ti risponderemo al più presto.")
-        
-        # Notifica all'admin
-        await context.bot.send_message(ADMIN_ID, f"📩 **Nuova richiesta di assistenza!**\nTicket #{ticket_id}\nMessaggio: {message_text}")
 
-        # Resetta lo stato
+        response = f"✅ **Ticket #{ticket_id} aperto!** Ti risponderemo al più presto."
+        await update.message.reply_text(response)
+
+        # Messaggio per il canale di assistenza
+        admin_message = f"📩 **Nuova Richiesta di Assistenza!**\n🎫 **Ticket ID:** {ticket_id}\n👤 **Utente:** @{username} ({user_id})\n📝 **Messaggio:** {message_text}"
+        await context.bot.send_message(CHANNEL_SUPPORT_ID, admin_message)
+
+        # Reset dello stato
         context.user_data['waiting_for_assistance'] = False
     else:
         await update.message.reply_text("❓ Usa la tastiera per navigare tra le opzioni disponibili.")
