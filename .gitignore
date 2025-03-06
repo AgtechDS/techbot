@@ -1,1 +1,57 @@
-.vercel
+# Evita di tracciare cartelle di sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+System Volume Information/
+
+# Evita file di configurazione dell'utente
+*.log
+*.lock
+*.cache
+*.env
+*.pyc
+*.pyo
+*.pyd
+*.sqlite
+*.db
+
+# Node.js e Python
+node_modules/
+__pycache__/
+venv/
+env/
+*.egg-info/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Editor e IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Credenziali e file di configurazione sensibili
+config.json
+.env
+secrets.json
+
+# File di pacchetti e build
+dist/
+build/
+*.tar.gz
+*.zip
+*.exe
+*.dll
+*.so
+*.o
+*.a
+*.out
+
+# Escludi eventuali file di sistema Windows
+AppData/
+ntuser.dat
+ntuser.ini
+OneDrive/
+OpenVPN/
+PCManger/
