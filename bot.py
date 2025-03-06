@@ -110,7 +110,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👤 **Utente:** @{username} ({user_id})\n"
             f"📝 **Messaggio:** {message_text}"
         )
-        await context.bot.send_message(SUPPORT_GROUP_ID, admin_message)
+        # Debug: Verifica invio al gruppo
+        print(f"Invio messaggio al gruppo {SUPPORT_GROUP_ID}")
+        try:
+            await context.bot.send_message(SUPPORT_GROUP_ID, admin_message)
+            print("✅ Messaggio inviato con successo!")
+        except Exception as e:
+            print(f"❌ Errore nell'invio del messaggio: {e}")
 
         # Reset dello stato
         context.user_data['waiting_for_assistance'] = False
